@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visualisasi Laju Produksi</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation"></script>
+    <style>
+        /* Gaya untuk Mode Terang */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f9;
+            color: #333;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        /* Gaya untuk Mode Gelap */
+        body.dark-mode {
+            background-color: #333;
+            color: #f4f4f9;
+        }
+
+        header {
+            text-align: center;
+            padding: 1em;
+            background-color: #004080;
+            color: white;
+        }
+
+        main {
+            padding: 2em;
+        }
+
+        #input-section {
+            margin-bottom: 2em;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        #input-section input,
+        #input-section select,
+        #input-section button {
+            margin: 0.5em 0;
+            padding: 0.5em;
+            width: 200px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            font-size: 1rem;
+        }
+
+        #input-section button {
+            background-color: #004080;
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        #input-section button:hover {
+            background-color: #003366;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 2em;
+        }
+
+        table,
+        th,
+        td {
+            border: 1px solid #ddd;
+        }
+
+        th,
+        td {
+            padding: 10px;
+            text-align: center;
+        }
+
+        th {
+            background-color: #004080;
+            color: white;
+        }
+
+        canvas {
+            max-width: 100%;
+            margin: 0 auto;
+        }
+
+        #description {
+            margin-top: 1em;
+            padding: 1em;
+            background-color: #eef;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        #darkModeToggle {
+            position: fixed;
+            top: 1em;
+            right: 1em;
+            padding: 0.5em 1em;
+            background-color: #004080;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1.2rem;
+        }
+
+        #darkModeToggle:hover {
+            background-color: #003366;
+        }
+
+        /* Responsif */
+        @media (max-width: 768px) {
+            main {
+                padding: 1em;
+            }
+
+            #input-section input,
+            #input-section select,
+            #input-section button {
+                width: 90%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Tombol Mode Gelap/Terang -->
+    <button id="darkModeToggle" onclick="toggleDarkMode()">🌙 Mode Gelap</button>
+    
+    <header>
+        <h1>Visualisasi Laju Produksi Minyak</h1>
+        <p>Masukkan data produksi untuk melihat grafik dan analisisnya.</p>
+    </header>
+    
+    <main>
+        <section id="input-section">
+            <h2>Input Data Produksi</h2>
+            <input type="number" id="day" placeholder="Hari (1, 2, 3, ...)" />
+            <input type="number" id="production" placeholder="Produksi (barrel)" />
+            <button onclick="addData()">Tambah Data</button>
+            <button onclick="resetData()">Reset Data</button>
+            <button onclick="downloadData()">Unduh Data</button>
+            <button onclick="predictProduction()">Prediksi Produksi</button>
+        </section>
+        
+        <canvas id="productionChart"></canvas>
+        
+        <div id="description">
+            <h3>Penjelasan Grafik</h3>
+            <p id="graphDescription">Masukkan data untuk melihat detail grafik di sini.</p>
+        </div>
+        
+        <section>
+            <h2>Histori Data</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Hari</th>
+                        <th>Produksi (barrel)</th>
+                    </tr>
+                </thead>
+                <tbody id="historyTable">
+                    <!-- Data histori akan ditambahkan di sini -->
+                </tbody>
+            </table>
+        </section>
+    </main>
+    
+    <script>
+        // Data Awal
+        const days = [];
+        const productions = [];
+        const MAX_PREDICTION_DAYS = 5; // Hari tambahan untuk prediksi
+
+        // Inisialisasi Chart.js
+        const ctx = document.getElementById('productionChart').getContext('2d');
+        const productionChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: days,
+                datasets: [{
+                    label: 'Laju Produksi Minyak (bbl)',
+                    data: productions,
+                    borderColor: '#004080',
+                    backgroundColor: 'rgba(0, 64, 128, 0.2)',
+                    borderWidth: 2,
+                    tension: 0.3,
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Hari'
+                        }
+                    },
+                    y: {
+                        title: {
+                            display: true,
+                            text: 'Produksi (barrel)'
+                        },
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+
+        // Fungsi Tambahkan Data
+        function addData() {
+            const dayInput = document.getElementById('day');
+            const productionInput = document.getElementById('production');
+            const day = parseInt(dayInput.value);
+            const production = parseFloat(productionInput.value);
+
+            if (!isNaN(day) && !isNaN(production)) {
+                days.push(day);
+                productions.push(production);
+                productionChart.update();
+                updateHistoryTable(day, production);
+                updateGraphDescription();
+                dayInput.value = '';
+                productionInput.value = '';
+            } else {
+                alert('Masukkan angka valid untuk hari dan produksi.');
+            }
+        }
+
+        // Fungsi Reset Data
+        function resetData() {
+            days.length = 0;
+            productions.length = 0;
+            productionChart.update();
+            document.getElementById('historyTable').innerHTML = '';
+            updateGraphDescription();
+        }
+
+        // Fungsi Update Tabel
+        function updateHistoryTable(day, production) {
+            const table = document.getElementById('historyTable');
+            const newRow = table.insertRow();
+            newRow.innerHTML = <td>${day}</td><td>${production}</td>;
+        }
+
+        // Fungsi Update Penjelasan Grafik
+        function updateGraphDescription() {
+            const description = document.getElementById('graphDescription');
+            if (productions.length > 0) {
+                const total = productions.reduce((a, b) => a + b, 0);
+                const avg = (total / productions.length).toFixed(2);
+                description.textContent = Total produksi: ${total} barrel. Rata-rata produksi: ${avg} barrel/hari.;
+            } else {
+                description.textContent = 'Masukkan data untuk melihat detail grafik.';
+            }
+        }
+
+        // Fungsi Download Data
+        function downloadData() {
+            const csvData = "Hari,Produksi (barrel)\n" + days.map((day, i) => ${day},${productions[i]}).join("\n");
+            const blob = new Blob([csvData], { type: 'text/csv' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'data_produksi.csv';
+            a.click();
+        }
+
+        // Fungsi Mode Gelap/Terang
+        function toggleDarkMode() {
+            document.body.classList.toggle('dark-mode');
+            const darkModeButton = document.getElementById('darkModeToggle');
+            if (document.body.classList.contains('dark-mode')) {
+                darkModeButton.textContent = '🌕 Mode Terang';
+            } else {
+                darkModeButton.textContent = '🌙 Mode Gelap';
+            }
+        }
+
+        // Fungsi Prediksi Produksi
+        function predictProduction() {
+            if (productions.length > 1) {
+                const lastDay = Math.max(...days);
+                const lastProduction = productions[productions.length - 1];
+                for (let i = 1; i <= MAX_PREDICTION_DAYS; i++) {
+                    days.push(lastDay + i);
+                    productions.push(lastProduction - i * 10); // Simulasi penurunan produksi
+                }
+                productionChart.update();
+                updateGraphDescription();
+            } else {
+                alert('Tambahkan setidaknya 2 data untuk memulai prediksi.');
+            }
+        }
+    </script>
+</body>
+</html>
